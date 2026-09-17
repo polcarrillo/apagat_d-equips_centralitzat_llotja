@@ -7,7 +7,8 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 
 # Archivo JSON donde se guardarán los datos
-ARCHIVO_CONFIG = "dispositivos_guardados.json"
+DIRECTORIO_ACTUAL = os.path.dirname(os.path.abspath(__file__))
+ARCHIVO_CONFIG = os.path.join(DIRECTORIO_ACTUAL, "dispositivos_guardados.json")
 
 class RedControlApp:
     def __init__(self, root):
