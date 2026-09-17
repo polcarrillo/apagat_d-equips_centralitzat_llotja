@@ -3,21 +3,21 @@ import json
 import subprocess
 import threading
 import socket
+from datetime import datetime
 import tkinter as tk
 from tkinter import ttk, messagebox
 
-# Archivo JSON donde se guardarán los datos
-DIRECTORIO_ACTUAL = os.path.dirname(os.path.abspath(__file__))
-ARCHIVO_CONFIG = os.path.join(DIRECTORIO_ACTUAL, "dispositivos_guardados.json")
+# Guardado en la carpeta del usuario para evitar problemas de permisos
+DIRECTORIO_USUARIO = os.path.expanduser("~")
+ARCHIVO_CONFIG = os.path.join(DIRECTORIO_USUARIO, "dispositivos_guardados.json")
 
 class RedControlApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Control de Red Local - Gestión de Dispositivos")
-        self.root.geometry("820x580")
+        self.root.geometry("850x600")
 
         self.subred_var = tk.StringVar(value="192.168.1")
-        # Estructura: {"192.168.1.15": {"alias": "PC Recepción", "hostname": "DESKTOP-ABC123"}}
         self.dispositivos = {} 
         self.check_vars = {}
 
@@ -42,22 +42,23 @@ class RedControlApp:
         frame_lista = ttk.LabelFrame(self.root, text=" 2. Dispositivos Registrados ")
         frame_lista.pack(fill="both", expand=True, padx=10, pady=5)
 
-        # Controles superiores de la lista
+        # Controles superiores
         frame_controles_lista = ttk.Frame(frame_lista)
         frame_controles_lista.pack(fill="x", padx=5, pady=2)
         
         ttk.Button(frame_controles_lista, text="Marcar Todos", command=lambda: self.seleccionar_todos(True)).pack(side="left", padx=2)
         ttk.Button(frame_controles_lista, text="Desmarcar Todos", command=lambda: self.seleccionar_todos(False)).pack(side="left", padx=2)
+        ttk.Button(frame_controles_lista, text="💾 Guardar Cambios Ahora", command=self.fuerza_guardado_manual).pack(side="left", padx=10)
         ttk.Button(frame_controles_lista, text="🗑️ Borrar Lista Guardada", command=self.limpiar_guardados).pack(side="right", padx=2)
 
-        # Cabecera explicativa de la tabla
+        # Cabecera de la tabla
         frame_cabecera = ttk.Frame(frame_lista)
         frame_cabecera.pack(fill="x", padx=5, pady=(5, 2))
         
         ttk.Label(frame_cabecera, text="Sel.", width=4).pack(side="left", padx=2)
         ttk.Label(frame_cabecera, text="Nombre Personalizado (Alias)", width=28, font=('TkDefaultFont', 9, 'bold')).pack(side="left", padx=5)
         ttk.Label(frame_cabecera, text="Dirección IP", width=16, font=('TkDefaultFont', 9, 'bold')).pack(side="left", padx=5)
-        ttk.Label(frame_cabecera, text="Nombre del Dispositivo (Hostname)", font=('TkDefaultFont', 9, 'bold')).pack(side="left", padx=5)
+        ttk.Label(frame_cabecera, text="Nombre de Red (Hostname)", font=('TkDefaultFont', 9, 'bold')).pack(side="left", padx=5)
 
         ttk.Separator(frame_lista, orient="horizontal").pack(fill="x", padx=5, pady=2)
 
@@ -83,16 +84,22 @@ class RedControlApp:
 
         ttk.Button(frame_acciones, text="⚡ Apagar", command=lambda: self.confirmar_accion("apagar")).pack(side="left", expand=True, padx=5, pady=5)
         ttk.Button(frame_acciones, text="🔄 Reiniciar", command=lambda: self.confirmar_accion("reiniciar")).pack(side="left", expand=True, padx=5, pady=5)
-        ttk.Button(frame_acciones, text="🕒 Sincronizar Hora", command=lambda: self.confirmar_accion("hora")).pack(side="left", expand=True, padx=5, pady=5)
-        ttk.Button(frame_acciones, text="📦 Actualizar Windows", command=lambda: self.confirmar_accion("actualizar")).pack(side="left", expand=True, padx=5, pady=5)
+        ttk.Button(frame_acciones, text="🕒 Sincronizar Hora (Host)", command=lambda: self.confirmar_accion("hora")).pack(side="left", expand=True, padx=5, pady=5)
+        ttk.Button(frame_acciones, text="📅 Poner al Día", command=lambda: self.confirmar_accion("actualizar")).pack(side="left", expand=True, padx=5, pady=5)
 
     # --- Persistencia JSON ---
     def guardar_dispositivos(self):
         try:
             with open(ARCHIVO_CONFIG, "w", encoding="utf-8") as f:
                 json.dump(self.dispositivos, f, indent=4, ensure_ascii=False)
+            return True
         except Exception as e:
-            print(f"Error al guardar datos: {e}")
+            messagebox.showerror("Error al guardar", f"No se pudo guardar el archivo:\n{e}")
+            return False
+
+    def fuerza_guardado_manual(self):
+        if self.guardar_dispositivos():
+            messagebox.showinfo("Guardado", f"Nombres y lista guardados con éxito en:\n{ARCHIVO_CONFIG}")
 
     def cargar_dispositivos_guardados(self):
         if os.path.exists(ARCHIVO_CONFIG):
@@ -100,7 +107,6 @@ class RedControlApp:
                 with open(ARCHIVO_CONFIG, "r", encoding="utf-8") as f:
                     datos = json.load(f)
                     
-                # Compatibilidad en caso de migrar datos de versiones anteriores
                 for ip, val in datos.items():
                     if isinstance(val, str):
                         self.dispositivos[ip] = {"alias": val, "hostname": "Desconocido"}
@@ -119,10 +125,9 @@ class RedControlApp:
             self.actualizar_lista_ui()
             self.lbl_estado.config(text="Lista limpiada.")
 
-    # --- Escaneo de Red y Obtención de Hostname ---
+    # --- Escaneo de Red ---
     def obtener_hostname(self, ip):
         try:
-            # Obtener nombre real por consulta DNS/NetBIOS de red
             nombre, _, _ = socket.gethostbyaddr(ip)
             return nombre
         except Exception:
@@ -134,13 +139,11 @@ class RedControlApp:
         if resultado.returncode == 0:
             hostname_detectado = self.obtener_hostname(ip)
             if ip not in self.dispositivos:
-                # Se crea con un alias sugerido para editar
                 self.dispositivos[ip] = {
                     "alias": f"Equipo ({ip.split('.')[-1]})",
                     "hostname": hostname_detectado
                 }
             else:
-                # Si ya existía, actualiza el hostname
                 self.dispositivos[ip]["hostname"] = hostname_detectado
 
     def iniciar_escaneo(self):
@@ -164,7 +167,7 @@ class RedControlApp:
         self.guardar_dispositivos()
         self.root.after(0, self.actualizar_lista_ui)
 
-    # --- Renderizado de la Interfaz ---
+    # --- Renderizado ---
     def actualizar_lista_ui(self):
         for widget in self.scroll_frame.winfo_children():
             widget.destroy()
@@ -179,25 +182,20 @@ class RedControlApp:
                 frame_item = ttk.Frame(self.scroll_frame)
                 frame_item.pack(fill="x", anchor="w", padx=5, pady=3)
 
-                # 1. Casilla de Selección
                 var = tk.BooleanVar()
                 chk = ttk.Checkbutton(frame_item, variable=var)
                 chk.pack(side="left", padx=(5, 10))
 
-                # 2. Campo Editable para Nombre Personalizado
                 alias_var = tk.StringVar(value=self.dispositivos[ip].get("alias", ""))
                 entry_alias = ttk.Entry(frame_item, textvariable=alias_var, width=28)
                 entry_alias.pack(side="left", padx=5)
 
-                # Guardado automático al modificar o presionar Enter
-                entry_alias.bind("<FocusOut>", lambda e, target_ip=ip, a_var=alias_var: self.guardar_alias(target_ip, a_var.get()))
-                entry_alias.bind("<Return>", lambda e, target_ip=ip, a_var=alias_var: self.guardar_alias(target_ip, a_var.get()))
+                entry_alias.bind("<FocusOut>", lambda event, target_ip=ip, a_var=alias_var: self.guardar_alias(target_ip, a_var.get()))
+                entry_alias.bind("<Return>", lambda event, target_ip=ip, a_var=alias_var: self.guardar_alias(target_ip, a_var.get()))
 
-                # 3. Dirección IP (Formato monoespaciado)
                 lbl_ip = ttk.Label(frame_item, text=ip, width=16, font=('Courier', 10))
                 lbl_ip.pack(side="left", padx=5)
 
-                # 4. Nombre de Red Real (Hostname)
                 hostname = self.dispositivos[ip].get("hostname", "No detectado")
                 lbl_hostname = ttk.Label(frame_item, text=hostname, foreground="#555555")
                 lbl_hostname.pack(side="left", padx=5)
@@ -216,7 +214,7 @@ class RedControlApp:
         for var in self.check_vars.values():
             var.set(estado)
 
-    # --- Envío de Órdenes Remotas ---
+    # --- Envío de Comandos Modificados ---
     def obtener_ips_seleccionadas(self):
         return [ip for ip, var in self.check_vars.items() if var.get()]
 
@@ -230,19 +228,35 @@ class RedControlApp:
             threading.Thread(target=self.ejecutar_comandos, args=(accion, seleccionados), daemon=True).start()
 
     def ejecutar_comandos(self, accion, ips):
+        # 1. Obtener la fecha y hora exactas del ordenador Host actual
+        ahora_host = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
         for ip in ips:
             if accion == "apagar":
                 cmd = f"shutdown /m \\\\{ip} /s /f /t 0"
+                
             elif accion == "reiniciar":
                 cmd = f"shutdown /m \\\\{ip} /r /f /t 0"
+                
             elif accion == "hora":
-                cmd = f"w32tm /resync /computer:{ip}"
+                # Forzar la fecha/hora del Host en el equipo objetivo usando PowerShell remoto
+                script_hora = f"Set-Date -Date '{ahora_host}'"
+                cmd = f'powershell -Command "Invoke-Command -ComputerName {ip} -ScriptBlock {{ {script_hora} }}"'
+                
             elif accion == "actualizar":
-                cmd = f'powershell -Command "Invoke-Command -ComputerName {ip} -ScriptBlock {{ USOClient StartInstall }}"'
+                # Comando 'Poner al Día': Busca, descarga e instala parches en Win 7, 10 y 11
+                script_actualizar = (
+                    "if (Get-Command USOClient -ErrorAction SilentlyContinue) { "
+                    "   USOClient StartInteractiveScan; USOClient StartDownload; USOClient StartInstall "
+                    "} else { "
+                    "   wuauclt /detectnow /updatenow "
+                    "}"
+                )
+                cmd = f'powershell -Command "Invoke-Command -ComputerName {ip} -ScriptBlock {{ {script_actualizar} }}"'
 
             subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
-        self.root.after(0, lambda: messagebox.showinfo("Éxito", f"Orden '{accion}' enviada correctamente."))
+        self.root.after(0, lambda: messagebox.showinfo("Éxito", f"Orden '{accion}' enviada correctamente a los equipos."))
 
 if __name__ == "__main__":
     root = tk.Tk()
