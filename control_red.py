@@ -22,7 +22,6 @@ class RedControlApp:
         self.manual_ip_var = tk.StringVar()
         self.manual_alias_var = tk.StringVar()
         
-        # Estructura: {"192.168.1.15": {"alias": "PC Recepció", "hostname": "DESKTOP-123", "seleccionado": True}}
         self.dispositius = {} 
         self.check_vars = {}
 
@@ -105,15 +104,13 @@ class RedControlApp:
 
         ttk.Button(frame_accions, text="⚡ Aturar", command=lambda: self.confirmar_accio("apagar")).pack(side="left", expand=True, padx=5, pady=5)
         ttk.Button(frame_accions, text="🔄 Reiniciar", command=lambda: self.confirmar_accio("reiniciar")).pack(side="left", expand=True, padx=5, pady=5)
-        ttk.Button(frame_accions, text="🕒 Sincronitzar Hora (Host)", command=lambda: self.confirmar_accio("hora")).pack(side="left", expand=True, padx=5, pady=5)
-        ttk.Button(frame_accions, text="📅 Posar al Dia", command=lambda: self.confirmar_accio("actualizar")).pack(side="left", expand=True, padx=5, pady=5)
+        ttk.Button(frame_accions, text="🕒 Sincronitzar Hora", command=lambda: self.confirmar_accio("hora")).pack(side="left", expand=True, padx=5, pady=5)
 
     # --- Gestió Manual de IP ---
     def afegir_ip_manual(self):
         ip = self.manual_ip_var.get().strip()
         alias = self.manual_alias_var.get().strip()
 
-        # Validar format IPv4 bàsic
         patro_ip = r"^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$"
         if not re.match(patro_ip, ip):
             messagebox.showerror("Error d'IP", "S'il us plau, introdueix una adreça IP vàlida (ex: 192.168.1.50).")
@@ -124,7 +121,6 @@ class RedControlApp:
 
         hostname_detectat = self.obtenir_hostname(ip)
 
-        # Registrar o actualitzar dispositiu
         self.dispositius[ip] = {
             "alias": alias,
             "hostname": hostname_detectat,
@@ -134,7 +130,6 @@ class RedControlApp:
         self.desar_dispositius()
         self.actualitzar_llista_ui()
 
-        # Netejar camps de text
         self.manual_ip_var.set("")
         self.manual_alias_var.set("")
         self.lbl_estat.config(text=f"IP {ip} afegida.")
@@ -295,15 +290,14 @@ class RedControlApp:
         noms_accions = {
             "apagar": "aturar",
             "reiniciar": "reiniciar",
-            "hora": "sincronitzar hora",
-            "actualizar": "posar al dia"
+            "hora": "sincronitzar hora"
         }
 
         if messagebox.askyesno("Confirmar", f"Vols executar '{noms_accions.get(accio, accio)}' en {len(seleccionats)} ordinador(s)?"):
             threading.Thread(target=self.executar_ordres, args=(accio, seleccionats), daemon=True).start()
 
     def executar_ordres(self, accio, ips):
-        ara_host = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        ara_host = datetime.now().strftime("%m/%d/%Y %H:%M:%S")
 
         for ip in ips:
             if accio == "apagar":
@@ -311,17 +305,12 @@ class RedControlApp:
             elif accio == "reiniciar":
                 cmd = f"shutdown /m \\\\{ip} /r /f /t 0"
             elif accio == "hora":
-                script_hora = f"Set-Date -Date '{ara_host}'"
-                cmd = f'powershell -Command "Invoke-Command -ComputerName {ip} -ScriptBlock {{ {script_hora} }}"'
-            elif accio == "actualizar":
-                script_actualitzat = (
-                    "if (Get-Command USOClient -ErrorAction SilentlyContinue) { "
-                    "   USOClient StartInteractiveScan; USOClient StartDownload; USOClient StartInstall "
-                    "} else { "
-                    "   wuauclt /detectnow /updatenow "
-                    "}"
+                script_hora = (
+                    f"net start w32time; "
+                    f"w32tm /resync /force; "
+                    f"Set-Date -Date '{ara_host}'"
                 )
-                cmd = f'powershell -Command "Invoke-Command -ComputerName {ip} -ScriptBlock {{ {script_actualitzat} }}"'
+                cmd = f'powershell -Command "Invoke-Command -ComputerName {ip} -ScriptBlock {{ {script_hora} }}"'
 
             subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
