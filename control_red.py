@@ -14,10 +14,10 @@ ARCHIVO_CONFIG = os.path.join(DIRECTORIO_USUARIO, "dispositivos_guardados.json")
 class RedControlApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Control de Red Local - Gestión de Dispositivos")
+        self.root.title("Gestor de dispositius de xarxa")
         self.root.geometry("850x600")
 
-        self.subred_var = tk.StringVar(value="192.168.1")
+        self.subred_var = tk.StringVar(value="192.168.30")
         self.dispositivos = {} 
         self.check_vars = {}
 
@@ -26,30 +26,30 @@ class RedControlApp:
 
     def crear_interfaz(self):
         # --- Panel de Escaneo ---
-        frame_escaneo = ttk.LabelFrame(self.root, text=" 1. Escaneo de Red ")
+        frame_escaneo = ttk.LabelFrame(self.root, text=" 1. Escaneig de Red ")
         frame_escaneo.pack(fill="x", padx=10, pady=5)
 
         ttk.Label(frame_escaneo, text="Subred:").pack(side="left", padx=5, pady=5)
         ttk.Entry(frame_escaneo, textvariable=self.subred_var, width=12).pack(side="left", padx=5)
 
-        self.btn_escanear = ttk.Button(frame_escaneo, text="🔍 Escanear Red", command=self.iniciar_escaneo)
+        self.btn_escanear = ttk.Button(frame_escaneo, text="🔍 Escaneajar Red", command=self.iniciar_escaneo)
         self.btn_escanear.pack(side="left", padx=5)
 
         self.lbl_estado = ttk.Label(frame_escaneo, text="Estado: Listo")
         self.lbl_estado.pack(side="left", padx=5)
 
         # --- Lista de Ordenadores Guardados/Detectados ---
-        frame_lista = ttk.LabelFrame(self.root, text=" 2. Dispositivos Registrados ")
+        frame_lista = ttk.LabelFrame(self.root, text=" 2. Dispositius Registrats ")
         frame_lista.pack(fill="both", expand=True, padx=10, pady=5)
 
         # Controles superiores
         frame_controles_lista = ttk.Frame(frame_lista)
         frame_controles_lista.pack(fill="x", padx=5, pady=2)
         
-        ttk.Button(frame_controles_lista, text="Marcar Todos", command=lambda: self.seleccionar_todos(True)).pack(side="left", padx=2)
-        ttk.Button(frame_controles_lista, text="Desmarcar Todos", command=lambda: self.seleccionar_todos(False)).pack(side="left", padx=2)
-        ttk.Button(frame_controles_lista, text="💾 Guardar Cambios Ahora", command=self.fuerza_guardado_manual).pack(side="left", padx=10)
-        ttk.Button(frame_controles_lista, text="🗑️ Borrar Lista Guardada", command=self.limpiar_guardados).pack(side="right", padx=2)
+        ttk.Button(frame_controles_lista, text="Marcar Tots", command=lambda: self.seleccionar_todos(True)).pack(side="left", padx=2)
+        ttk.Button(frame_controles_lista, text="Desmarcar Tots", command=lambda: self.seleccionar_todos(False)).pack(side="left", padx=2)
+        ttk.Button(frame_controles_lista, text="💾 Guardar Cambis Ara", command=self.fuerza_guardado_manual).pack(side="left", padx=10)
+        ttk.Button(frame_controles_lista, text="🗑️ Borrar Llista Guardada", command=self.limpiar_guardados).pack(side="right", padx=2)
 
         # Cabecera de la tabla
         frame_cabecera = ttk.Frame(frame_lista)
@@ -84,8 +84,8 @@ class RedControlApp:
 
         ttk.Button(frame_acciones, text="⚡ Apagar", command=lambda: self.confirmar_accion("apagar")).pack(side="left", expand=True, padx=5, pady=5)
         ttk.Button(frame_acciones, text="🔄 Reiniciar", command=lambda: self.confirmar_accion("reiniciar")).pack(side="left", expand=True, padx=5, pady=5)
-        ttk.Button(frame_acciones, text="🕒 Sincronizar Hora (Host)", command=lambda: self.confirmar_accion("hora")).pack(side="left", expand=True, padx=5, pady=5)
-        ttk.Button(frame_acciones, text="📅 Poner al Día", command=lambda: self.confirmar_accion("actualizar")).pack(side="left", expand=True, padx=5, pady=5)
+        ttk.Button(frame_acciones, text="🕒 Sincronitzar Hora (Host)", command=lambda: self.confirmar_accion("hora")).pack(side="left", expand=True, padx=5, pady=5)
+        ttk.Button(frame_acciones, text="📅 Posar al dia", command=lambda: self.confirmar_accion("actualizar")).pack(side="left", expand=True, padx=5, pady=5)
 
     # --- Persistencia JSON ---
     def guardar_dispositivos(self):
@@ -94,12 +94,12 @@ class RedControlApp:
                 json.dump(self.dispositivos, f, indent=4, ensure_ascii=False)
             return True
         except Exception as e:
-            messagebox.showerror("Error al guardar", f"No se pudo guardar el archivo:\n{e}")
+            messagebox.showerror("Error al guardar", f"No s'ha pogut guardar en l'arxiu:\n{e}")
             return False
 
     def fuerza_guardado_manual(self):
         if self.guardar_dispositivos():
-            messagebox.showinfo("Guardado", f"Nombres y lista guardados con éxito en:\n{ARCHIVO_CONFIG}")
+            messagebox.showinfo("Guardado", f"Nombres i llistes guardades amb èxit a:\n{ARCHIVO_CONFIG}")
 
     def cargar_dispositivos_guardados(self):
         if os.path.exists(ARCHIVO_CONFIG):
@@ -109,21 +109,21 @@ class RedControlApp:
                     
                 for ip, val in datos.items():
                     if isinstance(val, str):
-                        self.dispositivos[ip] = {"alias": val, "hostname": "Desconocido"}
+                        self.dispositivos[ip] = {"alias": val, "hostname": "Desconegut"}
                     else:
                         self.dispositivos[ip] = val
                         
                 self.actualizar_lista_ui()
-                self.lbl_estado.config(text=f"Cargados {len(self.dispositivos)} dispositivos.")
+                self.lbl_estado.config(text=f"Cargados {len(self.dispositivos)} dispositius.")
             except Exception as e:
                 self.dispositivos = {}
 
     def limpiar_guardados(self):
-        if messagebox.askyesno("Confirmar", "¿Deseas borrar la lista guardada de dispositivos?"):
+        if messagebox.askyesno("Confirmar", "¿Desitjes borrar la llista guardada de dispositius?"):
             self.dispositivos.clear()
             self.guardar_dispositivos()
             self.actualizar_lista_ui()
-            self.lbl_estado.config(text="Lista limpiada.")
+            self.lbl_estado.config(text="Llista llimpiada.")
 
     # --- Escaneo de Red ---
     def obtener_hostname(self, ip):
@@ -176,7 +176,7 @@ class RedControlApp:
         ips_ordenadas = sorted(self.dispositivos.keys(), key=lambda x: [int(i) for i in x.split('.')])
 
         if not ips_ordenadas:
-            ttk.Label(self.scroll_frame, text="No hay dispositivos registrados. Realiza un escaneo.").pack(padx=10, pady=10)
+            ttk.Label(self.scroll_frame, text="No hi ha dispositius registrats. Realitza un escaneig.").pack(padx=10, pady=10)
         else:
             for ip in ips_ordenadas:
                 frame_item = ttk.Frame(self.scroll_frame)
@@ -203,7 +203,7 @@ class RedControlApp:
                 self.check_vars[ip] = var
 
         self.btn_escanear.config(state="normal")
-        self.lbl_estado.config(text=f"Lista actualizada. Total: {len(self.dispositivos)} equipos.")
+        self.lbl_estado.config(text=f"Llista actualitzada. Total: {len(self.dispositivos)} equips.")
 
     def guardar_alias(self, ip, nuevo_alias):
         if ip in self.dispositivos:
@@ -221,7 +221,7 @@ class RedControlApp:
     def confirmar_accion(self, accion):
         seleccionados = self.obtener_ips_seleccionadas()
         if not seleccionados:
-            messagebox.showwarning("Atención", "Debes seleccionar al menos un ordenador.")
+            messagebox.showwarning("Atenció", "Has de seleccionar almenys un ordinador.")
             return
 
         if messagebox.askyesno("Confirmar", f"¿Deseas ejecutar '{accion}' en {len(seleccionados)} ordenador(es)?"):
