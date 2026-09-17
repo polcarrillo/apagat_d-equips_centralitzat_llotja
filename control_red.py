@@ -3,69 +3,89 @@ import json
 import subprocess
 import threading
 import socket
+import re
 from datetime import datetime
 import tkinter as tk
 from tkinter import ttk, messagebox
 
-# Archivo de configuración en la carpeta del usuario
-DIRECTORIO_USUARIO = os.path.expanduser("~")
-ARCHIVO_CONFIG = os.path.join(DIRECTORIO_USUARIO, "dispositivos_guardados.json")
+# Fitxer de configuració a la carpeta de l'usuari
+DIRECTORI_USUARI = os.path.expanduser("~")
+FITXER_CONFIG = os.path.join(DIRECTORI_USUARI, "dispositius_desats.json")
 
 class RedControlApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Control de Red Local - Gestión de Dispositivos")
-        self.root.geometry("850x600")
+        self.root.title("Control de Xarxa Local - Gestió de Dispositius")
+        self.root.geometry("880x680")
 
-        self.subred_var = tk.StringVar(value="192.168.1")
-        # Estructura: {"192.168.1.15": {"alias": "PC Recepción", "hostname": "DESKTOP-123", "seleccionado": True}}
-        self.dispositivos = {} 
+        self.subxarxa_var = tk.StringVar(value="192.168.1")
+        self.manual_ip_var = tk.StringVar()
+        self.manual_alias_var = tk.StringVar()
+        
+        # Estructura: {"192.168.1.15": {"alias": "PC Recepció", "hostname": "DESKTOP-123", "seleccionado": True}}
+        self.dispositius = {} 
         self.check_vars = {}
 
-        self.crear_interfaz()
-        self.cargar_dispositivos_guardados()
+        self.crear_interficie()
+        self.carregar_dispositius_desats()
 
-    def crear_interfaz(self):
-        # --- Panel de Escaneo ---
-        frame_escaneo = ttk.LabelFrame(self.root, text=" 1. Escaneo de Red ")
-        frame_escaneo.pack(fill="x", padx=10, pady=5)
+    def crear_interficie(self):
+        # --- Panell Superior: Escaneig i Afegir Manual ---
+        frame_superior = ttk.Frame(self.root)
+        frame_superior.pack(fill="x", padx=10, pady=5)
 
-        ttk.Label(frame_escaneo, text="Subred:").pack(side="left", padx=5, pady=5)
-        ttk.Entry(frame_escaneo, textvariable=self.subred_var, width=12).pack(side="left", padx=5)
+        # 1. Panell d'Escaneig
+        frame_escaneig = ttk.LabelFrame(frame_superior, text=" 1. Escaneig de Xarxa ")
+        frame_escaneig.pack(side="left", fill="both", expand=True, padx=(0, 5))
 
-        self.btn_escanear = ttk.Button(frame_escaneo, text="🔍 Escanear Red", command=self.iniciar_escaneo)
-        self.btn_escanear.pack(side="left", padx=5)
+        ttk.Label(frame_escaneig, text="Subxarxa:").pack(side="left", padx=5, pady=5)
+        ttk.Entry(frame_escaneig, textvariable=self.subxarxa_var, width=11).pack(side="left", padx=2)
 
-        self.lbl_estado = ttk.Label(frame_escaneo, text="Estado: Listo")
-        self.lbl_estado.pack(side="left", padx=5)
+        self.btn_escanejar = ttk.Button(frame_escaneig, text="🔍 Escanejar", command=self.iniciar_escaneig)
+        self.btn_escanejar.pack(side="left", padx=5)
 
-        # --- Lista de Ordenadores Guardados/Detectados ---
-        frame_lista = ttk.LabelFrame(self.root, text=" 2. Dispositivos Registrados ")
-        frame_lista.pack(fill="both", expand=True, padx=10, pady=5)
+        self.lbl_estat = ttk.Label(frame_escaneig, text="A punt")
+        self.lbl_estat.pack(side="left", padx=5)
 
-        # Controles superiores
-        frame_controles_lista = ttk.Frame(frame_lista)
-        frame_controles_lista.pack(fill="x", padx=5, pady=2)
+        # 2. Panell d'Afegir Dispositiu Manualment
+        frame_manual = ttk.LabelFrame(frame_superior, text=" Afegir IP Manualment ")
+        frame_manual.pack(side="right", fill="both", expand=False, padx=(5, 0))
+
+        ttk.Label(frame_manual, text="IP:").pack(side="left", padx=(5, 2), pady=5)
+        ttk.Entry(frame_manual, textvariable=self.manual_ip_var, width=14).pack(side="left", padx=2)
+
+        ttk.Label(frame_manual, text="Àlies:").pack(side="left", padx=(5, 2))
+        ttk.Entry(frame_manual, textvariable=self.manual_alias_var, width=15).pack(side="left", padx=2)
+
+        ttk.Button(frame_manual, text="➕ Afegir", command=self.afegir_ip_manual).pack(side="left", padx=5)
+
+        # --- Llista d'Ordinadors Desats/Detectats ---
+        frame_llista = ttk.LabelFrame(self.root, text=" 2. Dispositius Registrats ")
+        frame_llista.pack(fill="both", expand=True, padx=10, pady=5)
+
+        # Controls superiors
+        frame_controls_llista = ttk.Frame(frame_llista)
+        frame_controls_llista.pack(fill="x", padx=5, pady=2)
         
-        ttk.Button(frame_controles_lista, text="Marcar Todos", command=lambda: self.seleccionar_todos(True)).pack(side="left", padx=2)
-        ttk.Button(frame_controles_lista, text="Desmarcar Todos", command=lambda: self.seleccionar_todos(False)).pack(side="left", padx=2)
-        ttk.Button(frame_controles_lista, text="💾 Guardar Cambios Ahora", command=self.fuerza_guardado_manual).pack(side="left", padx=10)
-        ttk.Button(frame_controles_lista, text="🗑️ Borrar Lista Guardada", command=self.limpiar_guardados).pack(side="right", padx=2)
+        ttk.Button(frame_controls_llista, text="Marcar Tots", command=lambda: self.seleccionar_tots(True)).pack(side="left", padx=2)
+        ttk.Button(frame_controls_llista, text="Desmarcar Tots", command=lambda: self.seleccionar_tots(False)).pack(side="left", padx=2)
+        ttk.Button(frame_controls_llista, text="💾 Desar Canvis Ara", command=self.forca_desat_manual).pack(side="left", padx=10)
+        ttk.Button(frame_controls_llista, text="🗑️ Esborrar Llista Desada", command=self.netejar_desats).pack(side="right", padx=2)
 
-        # Cabecera de la tabla
-        frame_cabecera = ttk.Frame(frame_lista)
-        frame_cabecera.pack(fill="x", padx=5, pady=(5, 2))
+        # Capçalera de la taula
+        frame_capcalera = ttk.Frame(frame_llista)
+        frame_capcalera.pack(fill="x", padx=5, pady=(5, 2))
         
-        ttk.Label(frame_cabecera, text="Sel.", width=4).pack(side="left", padx=2)
-        ttk.Label(frame_cabecera, text="Nombre Personalizado (Alias)", width=28, font=('TkDefaultFont', 9, 'bold')).pack(side="left", padx=5)
-        ttk.Label(frame_cabecera, text="Dirección IP", width=16, font=('TkDefaultFont', 9, 'bold')).pack(side="left", padx=5)
-        ttk.Label(frame_cabecera, text="Nombre de Red (Hostname)", font=('TkDefaultFont', 9, 'bold')).pack(side="left", padx=5)
+        ttk.Label(frame_capcalera, text="Sel.", width=4).pack(side="left", padx=2)
+        ttk.Label(frame_capcalera, text="Nom Personalitzat (Àlies)", width=28, font=('TkDefaultFont', 9, 'bold')).pack(side="left", padx=5)
+        ttk.Label(frame_capcalera, text="Adreça IP", width=16, font=('TkDefaultFont', 9, 'bold')).pack(side="left", padx=5)
+        ttk.Label(frame_capcalera, text="Nom de Xarxa (Hostname)", font=('TkDefaultFont', 9, 'bold')).pack(side="left", padx=5)
 
-        ttk.Separator(frame_lista, orient="horizontal").pack(fill="x", padx=5, pady=2)
+        ttk.Separator(frame_llista, orient="horizontal").pack(fill="x", padx=5, pady=2)
 
-        # Contenedor con Scrollbar
-        self.canvas = tk.Canvas(frame_lista)
-        scrollbar = ttk.Scrollbar(frame_lista, orient="vertical", command=self.canvas.yview)
+        # Contenidor amb Scrollbar
+        self.canvas = tk.Canvas(frame_llista)
+        scrollbar = ttk.Scrollbar(frame_llista, orient="vertical", command=self.canvas.yview)
         self.scroll_frame = ttk.Frame(self.canvas)
 
         self.scroll_frame.bind(
@@ -79,89 +99,119 @@ class RedControlApp:
         self.canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
 
-        # --- Panel de Acciones ---
-        frame_acciones = ttk.LabelFrame(self.root, text=" 3. Enviar Orden ")
-        frame_acciones.pack(fill="x", padx=10, pady=5)
+        # --- Panell d'Accions ---
+        frame_accions = ttk.LabelFrame(self.root, text=" 3. Enviar Ordre ")
+        frame_accions.pack(fill="x", padx=10, pady=5)
 
-        ttk.Button(frame_acciones, text="⚡ Apagar", command=lambda: self.confirmar_accion("apagar")).pack(side="left", expand=True, padx=5, pady=5)
-        ttk.Button(frame_acciones, text="🔄 Reiniciar", command=lambda: self.confirmar_accion("reiniciar")).pack(side="left", expand=True, padx=5, pady=5)
-        ttk.Button(frame_acciones, text="🕒 Sincronizar Hora (Host)", command=lambda: self.confirmar_accion("hora")).pack(side="left", expand=True, padx=5, pady=5)
-        ttk.Button(frame_acciones, text="📅 Poner al Día", command=lambda: self.confirmar_accion("actualizar")).pack(side="left", expand=True, padx=5, pady=5)
+        ttk.Button(frame_accions, text="⚡ Aturar", command=lambda: self.confirmar_accio("apagar")).pack(side="left", expand=True, padx=5, pady=5)
+        ttk.Button(frame_accions, text="🔄 Reiniciar", command=lambda: self.confirmar_accio("reiniciar")).pack(side="left", expand=True, padx=5, pady=5)
+        ttk.Button(frame_accions, text="🕒 Sincronitzar Hora (Host)", command=lambda: self.confirmar_accio("hora")).pack(side="left", expand=True, padx=5, pady=5)
+        ttk.Button(frame_accions, text="📅 Posar al Dia", command=lambda: self.confirmar_accio("actualizar")).pack(side="left", expand=True, padx=5, pady=5)
 
-    # --- Persistencia JSON ---
-    def guardar_dispositivos(self):
+    # --- Gestió Manual de IP ---
+    def afegir_ip_manual(self):
+        ip = self.manual_ip_var.get().strip()
+        alias = self.manual_alias_var.get().strip()
+
+        # Validar format IPv4 bàsic
+        patro_ip = r"^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$"
+        if not re.match(patro_ip, ip):
+            messagebox.showerror("Error d'IP", "S'il us plau, introdueix una adreça IP vàlida (ex: 192.168.1.50).")
+            return
+
+        if not alias:
+            alias = f"Equip ({ip.split('.')[-1]})"
+
+        hostname_detectat = self.obtenir_hostname(ip)
+
+        # Registrar o actualitzar dispositiu
+        self.dispositius[ip] = {
+            "alias": alias,
+            "hostname": hostname_detectat,
+            "seleccionado": True
+        }
+
+        self.desar_dispositius()
+        self.actualitzar_llista_ui()
+
+        # Netejar camps de text
+        self.manual_ip_var.set("")
+        self.manual_alias_var.set("")
+        self.lbl_estat.config(text=f"IP {ip} afegida.")
+
+    # --- Persistència JSON ---
+    def desar_dispositius(self):
         try:
-            with open(ARCHIVO_CONFIG, "w", encoding="utf-8") as f:
-                json.dump(self.dispositivos, f, indent=4, ensure_ascii=False)
+            with open(FITXER_CONFIG, "w", encoding="utf-8") as f:
+                json.dump(self.dispositius, f, indent=4, ensure_ascii=False)
             return True
         except Exception as e:
-            messagebox.showerror("Error al guardar", f"No se pudo guardar el archivo:\n{e}")
+            messagebox.showerror("Error en desar", f"No s'ha pogut desar el fitxer:\n{e}")
             return False
 
-    def fuerza_guardado_manual(self):
-        if self.guardar_dispositivos():
-            messagebox.showinfo("Guardado", f"Datos y selecciones guardadas con éxito en:\n{ARCHIVO_CONFIG}")
+    def forca_desat_manual(self):
+        if self.desar_dispositius():
+            messagebox.showinfo("Desat", f"Dades i seleccions desades amb èxit a:\n{FITXER_CONFIG}")
 
-    def cargar_dispositivos_guardados(self):
-        if os.path.exists(ARCHIVO_CONFIG):
+    def carregar_dispositius_desats(self):
+        if os.path.exists(FITXER_CONFIG):
             try:
-                with open(ARCHIVO_CONFIG, "r", encoding="utf-8") as f:
+                with open(FITXER_CONFIG, "r", encoding="utf-8") as f:
                     datos = json.load(f)
                     
                 for ip, val in datos.items():
                     if isinstance(val, str):
-                        self.dispositivos[ip] = {"alias": val, "hostname": "Desconocido", "seleccionado": True}
+                        self.dispositius[ip] = {"alias": val, "hostname": "Desconegut", "seleccionado": True}
                     else:
-                        # Asegurar que existe la clave 'seleccionado'
                         if "seleccionado" not in val:
                             val["seleccionado"] = True
-                        self.dispositivos[ip] = val
+                        self.dispositius[ip] = val
                         
-                self.actualizar_lista_ui()
-                self.lbl_estado.config(text=f"Cargados {len(self.dispositivos)} dispositivos.")
-            except Exception as e:
-                self.dispositivos = {}
+                self.actualitzar_llista_ui()
+                self.lbl_estat.config(text=f"S'han carregat {len(self.dispositius)} dispositius.")
+            except Exception:
+                self.dispositius = {}
 
-    def limpiar_guardados(self):
-        if messagebox.askyesno("Confirmar", "¿Deseas borrar la lista guardada de dispositivos?"):
-            self.dispositivos.clear()
-            self.guardar_dispositivos()
-            self.actualizar_lista_ui()
-            self.lbl_estado.config(text="Lista limpiada.")
+    def netejar_desats(self):
+        if messagebox.askyesno("Confirmar", "Vols esborrar la llista desada de dispositius?"):
+            self.dispositius.clear()
+            self.desar_dispositius()
+            self.actualitzar_llista_ui()
+            self.lbl_estat.config(text="Llista netejada.")
 
-    # --- Escaneo de Red ---
-    def obtener_hostname(self, ip):
+    # --- Escaneig de Xarxa ---
+    def obtenir_hostname(self, ip):
         try:
             nombre, _, _ = socket.gethostbyaddr(ip)
             return nombre
         except Exception:
-            return "No detectado"
+            return "No detectat"
 
     def ping_ip(self, ip):
         comando = ["ping", "-n", "1", "-w", "500", ip]
         resultado = subprocess.run(comando, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         if resultado.returncode == 0:
-            hostname_detectado = self.obtener_hostname(ip)
-            if ip not in self.dispositivos:
-                self.dispositivos[ip] = {
-                    "alias": f"Equipo ({ip.split('.')[-1]})",
-                    "hostname": hostname_detectado,
+            hostname_detectat = self.obtenir_hostname(ip)
+            if ip not in self.dispositius:
+                self.dispositius[ip] = {
+                    "alias": f"Equip ({ip.split('.')[-1]})",
+                    "hostname": hostname_detectat,
                     "seleccionado": True
                 }
             else:
-                self.dispositivos[ip]["hostname"] = hostname_detectado
+                self.dispositius[ip]["hostname"] = hostname_detectat
 
-    def iniciar_escaneo(self):
-        self.btn_escanear.config(state="disabled")
-        self.lbl_estado.config(text="Escaneando red...")
+    def iniciar_escaneig(self):
+        self.btn_escanejar.config(state="disabled")
+        self.lbl_estat.config(text="Escanejant xarxa...")
         threading.Thread(target=self.escanear_red, daemon=True).start()
 
     def escanear_red(self):
-        subred = self.subred_var.get().strip()
+        subxarxa = self.subxarxa_var.get().strip()
         hilos = []
 
         for i in range(1, 255):
-            ip = f"{subred}.{i}"
+            ip = f"{subxarxa}.{i}"
             hilo = threading.Thread(target=self.ping_ip, args=(ip,))
             hilos.append(hilo)
             hilo.start()
@@ -169,106 +219,113 @@ class RedControlApp:
         for hilo in hilos:
             hilo.join()
 
-        self.guardar_dispositivos()
-        self.root.after(0, self.actualizar_lista_ui)
+        self.desar_dispositius()
+        self.root.after(0, self.actualitzar_llista_ui)
 
-    # --- Renderizado ---
-    def actualizar_lista_ui(self):
+    # --- Renderitzat ---
+    def actualitzar_llista_ui(self):
         for widget in self.scroll_frame.winfo_children():
             widget.destroy()
         self.check_vars.clear()
 
-        ips_ordenadas = sorted(self.dispositivos.keys(), key=lambda x: [int(i) for i in x.split('.')])
+        ips_ordenades = sorted(self.dispositius.keys(), key=lambda x: [int(i) for i in x.split('.')])
 
-        if not ips_ordenadas:
-            ttk.Label(self.scroll_frame, text="No hay dispositivos registrados. Realiza un escaneo.").pack(padx=10, pady=10)
+        if not ips_ordenades:
+            ttk.Label(self.scroll_frame, text="No hi ha dispositius registrats. Realitza un escaneig o afegeix una IP manualment.").pack(padx=10, pady=10)
         else:
-            for ip in ips_ordenadas:
+            for ip in ips_ordenades:
                 frame_item = ttk.Frame(self.scroll_frame)
                 frame_item.pack(fill="x", anchor="w", padx=5, pady=3)
 
-                # 1. Casilla de Selección (Carga el estado previo guardado)
-                estado_previo = self.dispositivos[ip].get("seleccionado", True)
-                var = tk.BooleanVar(value=estado_previo)
-                chk = ttk.Checkbutton(frame_item, variable=var, command=lambda target_ip=ip, b_var=var: self.guardar_estado_seleccion(target_ip, b_var.get()))
+                # Casella de Selecció
+                estat_previ = self.dispositius[ip].get("seleccionado", True)
+                var = tk.BooleanVar(value=estat_previ)
+                chk = ttk.Checkbutton(frame_item, variable=var, command=lambda target_ip=ip, b_var=var: self.desar_estat_seleccio(target_ip, b_var.get()))
                 chk.pack(side="left", padx=(5, 10))
 
-                # 2. Nombre Personalizado
-                alias_var = tk.StringVar(value=self.dispositivos[ip].get("alias", ""))
+                # Nom Personalitzat (Àlies)
+                alias_var = tk.StringVar(value=self.dispositius[ip].get("alias", ""))
                 entry_alias = ttk.Entry(frame_item, textvariable=alias_var, width=28)
                 entry_alias.pack(side="left", padx=5)
 
-                entry_alias.bind("<FocusOut>", lambda event, target_ip=ip, a_var=alias_var: self.guardar_alias(target_ip, a_var.get()))
-                entry_alias.bind("<Return>", lambda event, target_ip=ip, a_var=alias_var: self.guardar_alias(target_ip, a_var.get()))
+                entry_alias.bind("<FocusOut>", lambda event, target_ip=ip, a_var=alias_var: self.desar_alias(target_ip, a_var.get()))
+                entry_alias.bind("<Return>", lambda event, target_ip=ip, a_var=alias_var: self.desar_alias(target_ip, a_var.get()))
 
-                # 3. Dirección IP
+                # Adreça IP
                 lbl_ip = ttk.Label(frame_item, text=ip, width=16, font=('Courier', 10))
                 lbl_ip.pack(side="left", padx=5)
 
-                # 4. Hostname
-                hostname = self.dispositivos[ip].get("hostname", "No detectado")
+                # Hostname
+                hostname = self.dispositius[ip].get("hostname", "No detectat")
                 lbl_hostname = ttk.Label(frame_item, text=hostname, foreground="#555555")
                 lbl_hostname.pack(side="left", padx=5)
 
                 self.check_vars[ip] = var
 
-        self.btn_escanear.config(state="normal")
-        self.lbl_estado.config(text=f"Lista actualizada. Total: {len(self.dispositivos)} equipos.")
+        self.btn_escanejar.config(state="normal")
+        self.lbl_estat.config(text=f"Llista actualitzada. Total: {len(self.dispositius)} equips.")
 
-    def guardar_estado_seleccion(self, ip, estado):
-        if ip in self.dispositivos:
-            self.dispositivos[ip]["seleccionado"] = estado
-            self.guardar_dispositivos()
+    def desar_estat_seleccio(self, ip, estat):
+        if ip in self.dispositius:
+            self.dispositius[ip]["seleccionado"] = estat
+            self.desar_dispositius()
 
-    def guardar_alias(self, ip, nuevo_alias):
-        if ip in self.dispositivos:
-            self.dispositivos[ip]["alias"] = nuevo_alias
-            self.guardar_dispositivos()
+    def desar_alias(self, ip, nou_alias):
+        if ip in self.dispositius:
+            self.dispositius[ip]["alias"] = nou_alias
+            self.desar_dispositius()
 
-    def seleccionar_todos(self, estado):
+    def seleccionar_tots(self, estat):
         for ip, var in self.check_vars.items():
-            var.set(estado)
-            if ip in self.dispositivos:
-                self.dispositivos[ip]["seleccionado"] = estado
-        self.guardar_dispositivos()
+            var.set(estat)
+            if ip in self.dispositius:
+                self.dispositius[ip]["seleccionado"] = estat
+        self.desar_dispositius()
 
-    # --- Envío de Comandos ---
-    def obtener_ips_seleccionadas(self):
+    # --- Enviament d'Ordres ---
+    def obtenir_ips_seleccionades(self):
         return [ip for ip, var in self.check_vars.items() if var.get()]
 
-    def confirmar_accion(self, accion):
-        seleccionados = self.obtener_ips_seleccionadas()
-        if not seleccionados:
-            messagebox.showwarning("Atención", "Debes seleccionar al menos un ordenador.")
+    def confirmar_accio(self, accio):
+        seleccionats = self.obtenir_ips_seleccionades()
+        if not seleccionats:
+            messagebox.showwarning("Atenció", "Has de seleccionar almenys un ordinador.")
             return
 
-        if messagebox.askyesno("Confirmar", f"¿Deseas ejecutar '{accion}' en {len(seleccionados)} ordenador(es)?"):
-            threading.Thread(target=self.ejecutar_comandos, args=(accion, seleccionados), daemon=True).start()
+        noms_accions = {
+            "apagar": "aturar",
+            "reiniciar": "reiniciar",
+            "hora": "sincronitzar hora",
+            "actualizar": "posar al dia"
+        }
 
-    def ejecutar_comandos(self, accion, ips):
-        ahora_host = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        if messagebox.askyesno("Confirmar", f"Vols executar '{noms_accions.get(accio, accio)}' en {len(seleccionats)} ordinador(s)?"):
+            threading.Thread(target=self.executar_ordres, args=(accio, seleccionats), daemon=True).start()
+
+    def executar_ordres(self, accio, ips):
+        ara_host = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         for ip in ips:
-            if accion == "apagar":
+            if accio == "apagar":
                 cmd = f"shutdown /m \\\\{ip} /s /f /t 0"
-            elif accion == "reiniciar":
+            elif accio == "reiniciar":
                 cmd = f"shutdown /m \\\\{ip} /r /f /t 0"
-            elif accion == "hora":
-                script_hora = f"Set-Date -Date '{ahora_host}'"
+            elif accio == "hora":
+                script_hora = f"Set-Date -Date '{ara_host}'"
                 cmd = f'powershell -Command "Invoke-Command -ComputerName {ip} -ScriptBlock {{ {script_hora} }}"'
-            elif accion == "actualizar":
-                script_actualizar = (
+            elif accio == "actualizar":
+                script_actualitzat = (
                     "if (Get-Command USOClient -ErrorAction SilentlyContinue) { "
                     "   USOClient StartInteractiveScan; USOClient StartDownload; USOClient StartInstall "
                     "} else { "
                     "   wuauclt /detectnow /updatenow "
                     "}"
                 )
-                cmd = f'powershell -Command "Invoke-Command -ComputerName {ip} -ScriptBlock {{ {script_actualizar} }}"'
+                cmd = f'powershell -Command "Invoke-Command -ComputerName {ip} -ScriptBlock {{ {script_actualitzat} }}"'
 
             subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
-        self.root.after(0, lambda: messagebox.showinfo("Éxito", f"Orden '{accion}' enviada correctamente a los equipos."))
+        self.root.after(0, lambda: messagebox.showinfo("Èxit", f"L'ordre de '{accio}' s'ha enviat correctament als equips."))
 
 if __name__ == "__main__":
     root = tk.Tk()
