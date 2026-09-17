@@ -7,17 +7,18 @@ from datetime import datetime
 import tkinter as tk
 from tkinter import ttk, messagebox
 
-# Guardado en la carpeta del usuario para evitar problemas de permisos
+# Archivo de configuración en la carpeta del usuario
 DIRECTORIO_USUARIO = os.path.expanduser("~")
 ARCHIVO_CONFIG = os.path.join(DIRECTORIO_USUARIO, "dispositivos_guardados.json")
 
 class RedControlApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Gestor de dispositius de xarxa")
+        self.root.title("Control de Red Local - Gestión de Dispositivos")
         self.root.geometry("850x600")
 
-        self.subred_var = tk.StringVar(value="192.168.30")
+        self.subred_var = tk.StringVar(value="192.168.1")
+        # Estructura: {"192.168.1.15": {"alias": "PC Recepción", "hostname": "DESKTOP-123", "seleccionado": True}}
         self.dispositivos = {} 
         self.check_vars = {}
 
@@ -26,30 +27,30 @@ class RedControlApp:
 
     def crear_interfaz(self):
         # --- Panel de Escaneo ---
-        frame_escaneo = ttk.LabelFrame(self.root, text=" 1. Escaneig de Red ")
+        frame_escaneo = ttk.LabelFrame(self.root, text=" 1. Escaneo de Red ")
         frame_escaneo.pack(fill="x", padx=10, pady=5)
 
         ttk.Label(frame_escaneo, text="Subred:").pack(side="left", padx=5, pady=5)
         ttk.Entry(frame_escaneo, textvariable=self.subred_var, width=12).pack(side="left", padx=5)
 
-        self.btn_escanear = ttk.Button(frame_escaneo, text="🔍 Escaneajar Red", command=self.iniciar_escaneo)
+        self.btn_escanear = ttk.Button(frame_escaneo, text="🔍 Escanear Red", command=self.iniciar_escaneo)
         self.btn_escanear.pack(side="left", padx=5)
 
         self.lbl_estado = ttk.Label(frame_escaneo, text="Estado: Listo")
         self.lbl_estado.pack(side="left", padx=5)
 
         # --- Lista de Ordenadores Guardados/Detectados ---
-        frame_lista = ttk.LabelFrame(self.root, text=" 2. Dispositius Registrats ")
+        frame_lista = ttk.LabelFrame(self.root, text=" 2. Dispositivos Registrados ")
         frame_lista.pack(fill="both", expand=True, padx=10, pady=5)
 
         # Controles superiores
         frame_controles_lista = ttk.Frame(frame_lista)
         frame_controles_lista.pack(fill="x", padx=5, pady=2)
         
-        ttk.Button(frame_controles_lista, text="Marcar Tots", command=lambda: self.seleccionar_todos(True)).pack(side="left", padx=2)
-        ttk.Button(frame_controles_lista, text="Desmarcar Tots", command=lambda: self.seleccionar_todos(False)).pack(side="left", padx=2)
-        ttk.Button(frame_controles_lista, text="💾 Guardar Cambis Ara", command=self.fuerza_guardado_manual).pack(side="left", padx=10)
-        ttk.Button(frame_controles_lista, text="🗑️ Borrar Llista Guardada", command=self.limpiar_guardados).pack(side="right", padx=2)
+        ttk.Button(frame_controles_lista, text="Marcar Todos", command=lambda: self.seleccionar_todos(True)).pack(side="left", padx=2)
+        ttk.Button(frame_controles_lista, text="Desmarcar Todos", command=lambda: self.seleccionar_todos(False)).pack(side="left", padx=2)
+        ttk.Button(frame_controles_lista, text="💾 Guardar Cambios Ahora", command=self.fuerza_guardado_manual).pack(side="left", padx=10)
+        ttk.Button(frame_controles_lista, text="🗑️ Borrar Lista Guardada", command=self.limpiar_guardados).pack(side="right", padx=2)
 
         # Cabecera de la tabla
         frame_cabecera = ttk.Frame(frame_lista)
@@ -84,8 +85,8 @@ class RedControlApp:
 
         ttk.Button(frame_acciones, text="⚡ Apagar", command=lambda: self.confirmar_accion("apagar")).pack(side="left", expand=True, padx=5, pady=5)
         ttk.Button(frame_acciones, text="🔄 Reiniciar", command=lambda: self.confirmar_accion("reiniciar")).pack(side="left", expand=True, padx=5, pady=5)
-        ttk.Button(frame_acciones, text="🕒 Sincronitzar Hora (Host)", command=lambda: self.confirmar_accion("hora")).pack(side="left", expand=True, padx=5, pady=5)
-        ttk.Button(frame_acciones, text="📅 Posar al dia", command=lambda: self.confirmar_accion("actualizar")).pack(side="left", expand=True, padx=5, pady=5)
+        ttk.Button(frame_acciones, text="🕒 Sincronizar Hora (Host)", command=lambda: self.confirmar_accion("hora")).pack(side="left", expand=True, padx=5, pady=5)
+        ttk.Button(frame_acciones, text="📅 Poner al Día", command=lambda: self.confirmar_accion("actualizar")).pack(side="left", expand=True, padx=5, pady=5)
 
     # --- Persistencia JSON ---
     def guardar_dispositivos(self):
@@ -94,12 +95,12 @@ class RedControlApp:
                 json.dump(self.dispositivos, f, indent=4, ensure_ascii=False)
             return True
         except Exception as e:
-            messagebox.showerror("Error al guardar", f"No s'ha pogut guardar en l'arxiu:\n{e}")
+            messagebox.showerror("Error al guardar", f"No se pudo guardar el archivo:\n{e}")
             return False
 
     def fuerza_guardado_manual(self):
         if self.guardar_dispositivos():
-            messagebox.showinfo("Guardado", f"Nombres i llistes guardades amb èxit a:\n{ARCHIVO_CONFIG}")
+            messagebox.showinfo("Guardado", f"Datos y selecciones guardadas con éxito en:\n{ARCHIVO_CONFIG}")
 
     def cargar_dispositivos_guardados(self):
         if os.path.exists(ARCHIVO_CONFIG):
@@ -109,21 +110,24 @@ class RedControlApp:
                     
                 for ip, val in datos.items():
                     if isinstance(val, str):
-                        self.dispositivos[ip] = {"alias": val, "hostname": "Desconegut"}
+                        self.dispositivos[ip] = {"alias": val, "hostname": "Desconocido", "seleccionado": True}
                     else:
+                        # Asegurar que existe la clave 'seleccionado'
+                        if "seleccionado" not in val:
+                            val["seleccionado"] = True
                         self.dispositivos[ip] = val
                         
                 self.actualizar_lista_ui()
-                self.lbl_estado.config(text=f"Cargados {len(self.dispositivos)} dispositius.")
+                self.lbl_estado.config(text=f"Cargados {len(self.dispositivos)} dispositivos.")
             except Exception as e:
                 self.dispositivos = {}
 
     def limpiar_guardados(self):
-        if messagebox.askyesno("Confirmar", "¿Desitjes borrar la llista guardada de dispositius?"):
+        if messagebox.askyesno("Confirmar", "¿Deseas borrar la lista guardada de dispositivos?"):
             self.dispositivos.clear()
             self.guardar_dispositivos()
             self.actualizar_lista_ui()
-            self.lbl_estado.config(text="Llista llimpiada.")
+            self.lbl_estado.config(text="Lista limpiada.")
 
     # --- Escaneo de Red ---
     def obtener_hostname(self, ip):
@@ -141,7 +145,8 @@ class RedControlApp:
             if ip not in self.dispositivos:
                 self.dispositivos[ip] = {
                     "alias": f"Equipo ({ip.split('.')[-1]})",
-                    "hostname": hostname_detectado
+                    "hostname": hostname_detectado,
+                    "seleccionado": True
                 }
             else:
                 self.dispositivos[ip]["hostname"] = hostname_detectado
@@ -176,16 +181,19 @@ class RedControlApp:
         ips_ordenadas = sorted(self.dispositivos.keys(), key=lambda x: [int(i) for i in x.split('.')])
 
         if not ips_ordenadas:
-            ttk.Label(self.scroll_frame, text="No hi ha dispositius registrats. Realitza un escaneig.").pack(padx=10, pady=10)
+            ttk.Label(self.scroll_frame, text="No hay dispositivos registrados. Realiza un escaneo.").pack(padx=10, pady=10)
         else:
             for ip in ips_ordenadas:
                 frame_item = ttk.Frame(self.scroll_frame)
                 frame_item.pack(fill="x", anchor="w", padx=5, pady=3)
 
-                var = tk.BooleanVar()
-                chk = ttk.Checkbutton(frame_item, variable=var)
+                # 1. Casilla de Selección (Carga el estado previo guardado)
+                estado_previo = self.dispositivos[ip].get("seleccionado", True)
+                var = tk.BooleanVar(value=estado_previo)
+                chk = ttk.Checkbutton(frame_item, variable=var, command=lambda target_ip=ip, b_var=var: self.guardar_estado_seleccion(target_ip, b_var.get()))
                 chk.pack(side="left", padx=(5, 10))
 
+                # 2. Nombre Personalizado
                 alias_var = tk.StringVar(value=self.dispositivos[ip].get("alias", ""))
                 entry_alias = ttk.Entry(frame_item, textvariable=alias_var, width=28)
                 entry_alias.pack(side="left", padx=5)
@@ -193,9 +201,11 @@ class RedControlApp:
                 entry_alias.bind("<FocusOut>", lambda event, target_ip=ip, a_var=alias_var: self.guardar_alias(target_ip, a_var.get()))
                 entry_alias.bind("<Return>", lambda event, target_ip=ip, a_var=alias_var: self.guardar_alias(target_ip, a_var.get()))
 
+                # 3. Dirección IP
                 lbl_ip = ttk.Label(frame_item, text=ip, width=16, font=('Courier', 10))
                 lbl_ip.pack(side="left", padx=5)
 
+                # 4. Hostname
                 hostname = self.dispositivos[ip].get("hostname", "No detectado")
                 lbl_hostname = ttk.Label(frame_item, text=hostname, foreground="#555555")
                 lbl_hostname.pack(side="left", padx=5)
@@ -203,7 +213,12 @@ class RedControlApp:
                 self.check_vars[ip] = var
 
         self.btn_escanear.config(state="normal")
-        self.lbl_estado.config(text=f"Llista actualitzada. Total: {len(self.dispositivos)} equips.")
+        self.lbl_estado.config(text=f"Lista actualizada. Total: {len(self.dispositivos)} equipos.")
+
+    def guardar_estado_seleccion(self, ip, estado):
+        if ip in self.dispositivos:
+            self.dispositivos[ip]["seleccionado"] = estado
+            self.guardar_dispositivos()
 
     def guardar_alias(self, ip, nuevo_alias):
         if ip in self.dispositivos:
@@ -211,40 +226,37 @@ class RedControlApp:
             self.guardar_dispositivos()
 
     def seleccionar_todos(self, estado):
-        for var in self.check_vars.values():
+        for ip, var in self.check_vars.items():
             var.set(estado)
+            if ip in self.dispositivos:
+                self.dispositivos[ip]["seleccionado"] = estado
+        self.guardar_dispositivos()
 
-    # --- Envío de Comandos Modificados ---
+    # --- Envío de Comandos ---
     def obtener_ips_seleccionadas(self):
         return [ip for ip, var in self.check_vars.items() if var.get()]
 
     def confirmar_accion(self, accion):
         seleccionados = self.obtener_ips_seleccionadas()
         if not seleccionados:
-            messagebox.showwarning("Atenció", "Has de seleccionar almenys un ordinador.")
+            messagebox.showwarning("Atención", "Debes seleccionar al menos un ordenador.")
             return
 
         if messagebox.askyesno("Confirmar", f"¿Deseas ejecutar '{accion}' en {len(seleccionados)} ordenador(es)?"):
             threading.Thread(target=self.ejecutar_comandos, args=(accion, seleccionados), daemon=True).start()
 
     def ejecutar_comandos(self, accion, ips):
-        # 1. Obtener la fecha y hora exactas del ordenador Host actual
         ahora_host = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         for ip in ips:
             if accion == "apagar":
                 cmd = f"shutdown /m \\\\{ip} /s /f /t 0"
-                
             elif accion == "reiniciar":
                 cmd = f"shutdown /m \\\\{ip} /r /f /t 0"
-                
             elif accion == "hora":
-                # Forzar la fecha/hora del Host en el equipo objetivo usando PowerShell remoto
                 script_hora = f"Set-Date -Date '{ahora_host}'"
                 cmd = f'powershell -Command "Invoke-Command -ComputerName {ip} -ScriptBlock {{ {script_hora} }}"'
-                
             elif accion == "actualizar":
-                # Comando 'Poner al Día': Busca, descarga e instala parches en Win 7, 10 y 11
                 script_actualizar = (
                     "if (Get-Command USOClient -ErrorAction SilentlyContinue) { "
                     "   USOClient StartInteractiveScan; USOClient StartDownload; USOClient StartInstall "
