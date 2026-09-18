@@ -296,8 +296,8 @@ class RedControlApp:
         if messagebox.askyesno("Confirmar", f"Vols executar '{noms_accions.get(accio, accio)}' en {len(seleccionats)} ordinador(s)?"):
             threading.Thread(target=self.executar_ordres, args=(accio, seleccionats), daemon=True).start()
 
-def executar_ordres(self, accio, ips):
-        # Format de data i hora per al CMD remot de Windows 7/10/11
+# Has de tenir 4 espais abans de 'def'
+    def executar_ordres(self, accio, ips):
         data_cmd = datetime.now().strftime("%d-%m-%Y")
         hora_cmd = datetime.now().strftime("%H:%M:%S")
 
@@ -307,7 +307,6 @@ def executar_ordres(self, accio, ips):
             elif accio == "reiniciar":
                 cmd = f"shutdown /m \\\\{ip} /r /f /t 0"
             elif accio == "hora":
-                # Executa la sincronització directament via WMIC (compatible amb la teva preparació de Windows 7)
                 cmd = (
                     f'wmic /node:"{ip}" process call create '
                     f'"cmd.exe /c date {data_cmd} & time {hora_cmd} & w32tm /resync /force"'
