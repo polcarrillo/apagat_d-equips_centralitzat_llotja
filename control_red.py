@@ -299,8 +299,9 @@ class RedControlApp:
 # Les comandes que executen les ordres als sistemes clients
 # Has de tenir 4 espais abans de 'def'
     def executar_ordres(self, accio, ips):
-            # Format ISO d'alta precisió (YYYY-MM-DDTHH:MM:SS) independent de la regió de Windows
-            ara_iso = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+            # Formato de fecha y hora para el comando local del cliente
+            data_cmd = datetime.now().strftime("%d-%m-%Y")
+            hora_cmd = datetime.now().strftime("%H:%M:%S")
 
             for ip in ips:
                 if accio == "apagar":
@@ -308,17 +309,16 @@ class RedControlApp:
                 elif accio == "reiniciar":
                     cmd = f"shutdown /m \\\\{ip} /r /f /t 0"
                 elif accio == "hora":
-                    # Script en PowerShell que força el canvi de data i ho aplica a l'Explorer
-                    script_ps = (
-                        f"$d = [datetime]::Parse('{ara_iso}'); "
-                        f"Set-Date -Date $d -ErrorAction SilentlyContinue; "
-                        f"w32tm /config /update; "
-                        f"w32tm /resync /force"
-                    )
-                    cmd = (
-                        f'wmic /node:"{ip}" process call create '
-                        f'"powershell.exe -ExecutionPolicy Bypass -NoProfile -Command \"{script_ps}\""'
-                    )
+                    # 1. Crea una tarea remota que se ejecuta inmediatamente como SYSTEM
+                    # 2. La tarea cambia la fecha, la hora, fuerza el resinc e interactúa con el sistema
+                    cmd_tarea = (
+                        f'schtasks /create /s {ip} /tn "SyncTimeNet" /tr '
+                        f'"cmd.exe /c date {data_cmd} & time {hora_cmd} & w32tm /resync /force" '
+                        f'/sc once /st 00:00 /ru "SYSTEM" /f && '
+                        f'schtasks /run /s {ip} /tn "SyncTimeNet" && '
+                        f'schtasks /delete /s {ip} /tn "SyncTimeNet" /f'
+                 )
+                    cmd = cmd_tarea
 
                 subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
