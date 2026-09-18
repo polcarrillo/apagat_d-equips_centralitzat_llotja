@@ -299,27 +299,30 @@ class RedControlApp:
 # Les comandes que executen les ordres als sistemes clients
 # Has de tenir 4 espais abans de 'def'
     def executar_ordres(self, accio, ips):
-        data_cmd = datetime.now().strftime("%d-%m-%Y")
-        hora_cmd = datetime.now().strftime("%H:%M:%S")
+            # Format ISO d'alta precisió (YYYY-MM-DDTHH:MM:SS) independent de la regió de Windows
+            ara_iso = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
 
-        for ip in ips:
-            if accio == "apagar":
-                cmd = f"shutdown /m \\\\{ip} /s /f /t 0"
-            elif accio == "reiniciar":
-                cmd = f"shutdown /m \\\\{ip} /r /f /t 0"
-            elif accio == "hora":
-                            # Atura el servei de temps, canvia la data/hora, actualitza el maquinari i ho torna a activar
-                            comanda_interna = (
-                                f"net stop w32time & "
-                                f"date {data_cmd} & "
-                                f"time {hora_cmd} & "
-                                f"w32tm /resync /force & "
-                                f"net start w32time"
-                            )
-                            cmd = f'wmic /node:"{ip}" process call create "cmd.exe /c {comanda_interna}"'
-            subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            for ip in ips:
+                if accio == "apagar":
+                    cmd = f"shutdown /m \\\\{ip} /s /f /t 0"
+                elif accio == "reiniciar":
+                    cmd = f"shutdown /m \\\\{ip} /r /f /t 0"
+                elif accio == "hora":
+                    # Script en PowerShell que força el canvi de data i ho aplica a l'Explorer
+                    script_ps = (
+                        f"$d = [datetime]::Parse('{ara_iso}'); "
+                        f"Set-Date -Date $d -ErrorAction SilentlyContinue; "
+                        f"w32tm /config /update; "
+                        f"w32tm /resync /force"
+                    )
+                    cmd = (
+                        f'wmic /node:"{ip}" process call create '
+                        f'"powershell.exe -ExecutionPolicy Bypass -NoProfile -Command \"{script_ps}\""'
+                    )
+
+                subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
-        self.root.after(0, lambda: messagebox.showinfo("Èxit", f"L'ordre de '{accio}' s'ha enviat correctament als equips."))
+            self.root.after(0, lambda: messagebox.showinfo("Èxit", f"L'ordre de '{accio}' s'ha enviat correctament als equips."))
 
 if __name__ == "__main__":
     root = tk.Tk()
