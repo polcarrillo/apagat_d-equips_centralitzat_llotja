@@ -297,30 +297,27 @@ class RedControlApp:
             threading.Thread(target=self.executar_ordres, args=(accio, seleccionats), daemon=True).start()
 
 # Les comandes que executen les ordres als sistemes clients
-def executar_ordres(self, accio, ips):
+# Has de tenir 4 espais abans de 'def'
+    def executar_ordres(self, accio, ips):
         data_cmd = datetime.now().strftime("%d-%m-%Y")
         hora_cmd = datetime.now().strftime("%H:%M:%S")
 
-        # Posa aquí l'usuari i la contrasenya del Windows 7
-        USUARI = "Administrador"
-        CONTRASENYA = "ElTeuPassword"
-
         for ip in ips:
-            # 1. Obrir sessió autenticada amb l'equip remot
-            subprocess.run(f'net use \\\\{ip}\\ipc$ "{CONTRASENYA}" /user:"{USUARI}"', shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-            # 2. Executar l'acció triada
             if accio == "apagar":
                 cmd = f"shutdown /m \\\\{ip} /s /f /t 0"
             elif accio == "reiniciar":
                 cmd = f"shutdown /m \\\\{ip} /r /f /t 0"
             elif accio == "hora":
-                cmd = f'wmic /node:"{ip}" /user:"{USUARI}" /password:"{CONTRASENYA}" process call create "cmd.exe /c date {data_cmd} & time {hora_cmd} & w32tm /resync /force"'
-
+                            # Atura el servei de temps, canvia la data/hora, actualitza el maquinari i ho torna a activar
+                            comanda_interna = (
+                                f"net stop w32time & "
+                                f"date {data_cmd} & "
+                                f"time {hora_cmd} & "
+                                f"w32tm /resync /force & "
+                                f"net start w32time"
+                            )
+                            cmd = f'wmic /node:"{ip}" process call create "cmd.exe /c {comanda_interna}"'
             subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-            # 3. Tancar sessió de xarxa
-            subprocess.run(f'net use \\\\{ip}\\ipc$ /delete /y', shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
         self.root.after(0, lambda: messagebox.showinfo("Èxit", f"L'ordre de '{accio}' s'ha enviat correctament als equips."))
 
