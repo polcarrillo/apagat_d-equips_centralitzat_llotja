@@ -297,24 +297,20 @@ class RedControlApp:
             threading.Thread(target=self.executar_ordres, args=(accio, seleccionats), daemon=True).start()
 
     def executar_ordres(self, accio, ips):
-        ara_host = datetime.now().strftime("%m/%d/%Y %H:%M:%S")
+            for ip in ips:
+                if accio == "apagar":
+                    cmd = f"shutdown /m \\\\{ip} /s /f /t 0"
+                elif accio == "reiniciar":
+                    cmd = f"shutdown /m \\\\{ip} /r /f /t 0"
+                elif accio == "hora":
+                    data_cmd = datetime.now().strftime("%d-%m-%y")
+                    hora_cmd = datetime.now().strftime("%H:%M:%S")
 
-        for ip in ips:
-            if accio == "apagar":
-                cmd = f"shutdown /m \\\\{ip} /s /f /t 0"
-            elif accio == "reiniciar":
-                cmd = f"shutdown /m \\\\{ip} /r /f /t 0"
-            elif accio == "hora":
-                script_hora = (
-                    f"net start w32time; "
-                    f"w32tm /resync /force; "
-                    f"Set-Date -Date '{ara_host}'"
-                )
-                cmd = f'powershell -Command "Invoke-Command -ComputerName {ip} -ScriptBlock {{ {script_hora} }}"'
+                    cmd = f'wmic /node:"{ip}" process call create "cmd.exe /c date {data_cmd} && time {hora_cmd} && w32tm /resync /force"'
 
-            subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
-        self.root.after(0, lambda: messagebox.showinfo("Èxit", f"L'ordre de '{accio}' s'ha enviat correctament als equips."))
+            self.root.after(0, lambda: messagebox.showinfo("Èxit", f"L'ordre de '{accio}' s'ha enviat correctament als equips."))
 
 if __name__ == "__main__":
     root = tk.Tk()
