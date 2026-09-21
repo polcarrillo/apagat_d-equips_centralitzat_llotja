@@ -4,6 +4,8 @@ import subprocess
 import threading
 import socket
 import re
+import time
+import tempfile
 from datetime import datetime
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -296,33 +298,129 @@ class RedControlApp:
         if messagebox.askyesno("Confirmar", f"Vols executar '{noms_accions.get(accio, accio)}' en {len(seleccionats)} ordinador(s)?"):
             threading.Thread(target=self.executar_ordres, args=(accio, seleccionats), daemon=True).start()
 
-# Les comandes que executen les ordres als sistemes clients
-# Has de tenir 4 espais abans de 'def'
-    def executar_ordres(self, accio, ips):
-            # Formato de fecha y hora para el comando local del cliente
-            data_cmd = datetime.now().strftime("%d-%m-%Y")
-            hora_cmd = datetime.now().strftime("%H:%M:%S")
+    # --- Execució de comandes amb control d'errors ---
+    NOM_TASCA = "SyncTimeNet"
+    RUTA_BAT_REMOT = r"C:\Windows\Temp\sync_hora.bat"
 
+    def _run(self, cmd, timeout=90, comprovar=True):
+        """Executa una comanda i llança una excepció amb el missatge real d'error."""
+        res = subprocess.run(
+            cmd, shell=True, capture_output=True, text=True,
+            encoding="cp850", errors="replace", timeout=timeout
+        )
+        if comprovar and res.returncode != 0:
+            linies = [l.strip() for l in ((res.stderr or "") + "\n" + (res.stdout or "")).splitlines() if l.strip()]
+            raise RuntimeError(linies[-1] if linies else f"codi de sortida {res.returncode}")
+        return res.stdout or ""
+
+    def _generar_bat_hora(self, desti_local):
+        """Crea el .bat que s'executarà DINS del client Windows 7."""
+        ara = datetime.now()
+        controlador = socket.gethostname()
+
+        contingut = (
+            "@echo off\r\n"
+            "rem 1r intent: agafar l'hora del PC controlador (mes precis)\r\n"
+            f"net time \\\\{controlador} /set /y >nul 2>&1\r\n"
+            "if not errorlevel 1 goto fet\r\n"
+            "\r\n"
+            "rem 2n intent: posar l'hora enviada, en format invariant (no depen de l'idioma)\r\n"
+            "powershell -NoProfile -Command \"Set-Date ([datetime]::ParseExact('"
+            f"{ara.strftime('%Y-%m-%d %H:%M:%S')}"
+            "','yyyy-MM-dd HH:mm:ss',[Globalization.CultureInfo]::InvariantCulture))\" >nul 2>&1\r\n"
+            "if not errorlevel 1 goto fet\r\n"
+            "\r\n"
+            "rem 3r intent: comandes classiques date/time\r\n"
+            f"date {ara.strftime('%d-%m-%Y')}\r\n"
+            f"time {ara.strftime('%H:%M:%S')}\r\n"
+            "\r\n"
+            ":fet\r\n"
+            "rem OJO: a Windows 7 NO existeix /force. Nomes /nowait /rediscover /soft\r\n"
+            "net start w32time >nul 2>&1\r\n"
+            "w32tm /resync /rediscover >nul 2>&1\r\n"
+            "exit /b 0\r\n"
+        )
+
+        with open(desti_local, "w", encoding="cp850", errors="replace", newline="") as f:
+            f.write(contingut)
+
+    def sincronitzar_hora(self, ips):
+        """Copia un .bat a cada equip, el llança com a SYSTEM i despres neteja."""
+        errors = {}
+        preparats = []
+
+        with tempfile.TemporaryDirectory() as tmp:
+            bat_local = os.path.join(tmp, "sync_hora.bat")
+            self._generar_bat_hora(bat_local)
+
+            # Fase 1: copiar el .bat i registrar la tasca
             for ip in ips:
-                if accio == "apagar":
-                    cmd = f"shutdown /m \\\\{ip} /s /f /t 0"
-                elif accio == "reiniciar":
-                    cmd = f"shutdown /m \\\\{ip} /r /f /t 0"
-                elif accio == "hora":
-                    # 1. Crea una tarea remota que se ejecuta inmediatamente como SYSTEM
-                    # 2. La tarea cambia la fecha, la hora, fuerza el resinc e interactúa con el sistema
-                    cmd_tarea = (
-                        f'schtasks /create /s {ip} /tn "SyncTimeNet" /tr '
-                        f'"cmd.exe /c date {data_cmd} & time {hora_cmd} & w32tm /resync /force" '
-                        f'/sc once /st 00:00 /ru "SYSTEM" /f && '
-                        f'schtasks /run /s {ip} /tn "SyncTimeNet" && '
-                        f'schtasks /delete /s {ip} /tn "SyncTimeNet" /f'
-                 )
-                    cmd = cmd_tarea
+                try:
+                    self._run(f'copy /y "{bat_local}" "\\\\{ip}\\ADMIN$\\Temp\\sync_hora.bat"')
+                    self._run(
+                        f'schtasks /create /s {ip} /tn "{self.NOM_TASCA}" '
+                        f'/tr "{self.RUTA_BAT_REMOT}" /sc onstart /ru "SYSTEM" /f'
+                    )
+                    preparats.append(ip)
+                except Exception as e:
+                    errors[ip] = str(e)
 
-                subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        
-            self.root.after(0, lambda: messagebox.showinfo("Èxit", f"L'ordre de '{accio}' s'ha enviat correctament als equips."))
+            # Fase 2: llançar-les totes
+            llancats = []
+            for ip in preparats:
+                try:
+                    self._run(f'schtasks /run /s {ip} /tn "{self.NOM_TASCA}"')
+                    llancats.append(ip)
+                except Exception as e:
+                    errors[ip] = str(e)
+
+            # Fase 3: esperar UN cop que acabin abans d'esborrar (aqui fallava l'original)
+            if llancats:
+                time.sleep(12)
+
+            # Fase 4: comprovar resultat i netejar
+            for ip in preparats:
+                if ip in llancats:
+                    try:
+                        sortida = self._run(
+                            f'schtasks /query /s {ip} /tn "{self.NOM_TASCA}" /fo LIST /v',
+                            comprovar=False
+                        )
+                        m = re.search(r"(?:Last Result|.*sultat.*):\s*(\S+)", sortida)
+                        if m and m.group(1) not in ("0", "0x0"):
+                            errors[ip] = f"la tasca va acabar amb codi {m.group(1)}"
+                    except Exception:
+                        pass
+                self._run(f'schtasks /delete /s {ip} /tn "{self.NOM_TASCA}" /f', comprovar=False)
+                self._run(f'del /f /q "\\\\{ip}\\ADMIN$\\Temp\\sync_hora.bat"', comprovar=False)
+
+        return errors
+
+    def executar_ordres(self, accio, ips):
+        errors = {}
+
+        if accio == "hora":
+            errors = self.sincronitzar_hora(ips)
+        else:
+            for ip in ips:
+                try:
+                    if accio == "apagar":
+                        self._run(f"shutdown /m \\\\{ip} /s /f /t 0")
+                    elif accio == "reiniciar":
+                        self._run(f"shutdown /m \\\\{ip} /r /f /t 0")
+                    else:
+                        raise RuntimeError(f"Acció desconeguda: {accio}")
+                except Exception as e:
+                    errors[ip] = str(e)
+
+        correctes = len(ips) - len(errors)
+        if errors:
+            detall = "\n".join(f"• {ip}: {msg}" for ip, msg in errors.items())
+            missatge = f"Correctes: {correctes}/{len(ips)}\n\nHan fallat:\n{detall}"
+            self.root.after(0, lambda: messagebox.showwarning("Resultat amb errors", missatge))
+        else:
+            self.root.after(0, lambda: messagebox.showinfo(
+                "Èxit", f"'{accio}' executat correctament a {correctes} equip(s)."))
 
 if __name__ == "__main__":
     root = tk.Tk()
