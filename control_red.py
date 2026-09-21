@@ -71,7 +71,7 @@ class RedControlApp:
         ttk.Button(frame_controls_llista, text="Marcar Tots", command=lambda: self.seleccionar_tots(True)).pack(side="left", padx=2)
         ttk.Button(frame_controls_llista, text="Desmarcar Tots", command=lambda: self.seleccionar_tots(False)).pack(side="left", padx=2)
         ttk.Button(frame_controls_llista, text="💾 Desar Canvis Ara", command=self.forca_desat_manual).pack(side="left", padx=10)
-        ttk.Button(frame_controls_llista, text="🗑️ Esborrar Llista Desada", command=self.netejar_desats).pack(side="right", padx=2)
+        ttk.Button(frame_controls_llista, text="🗑️ Esborrar Seleccionats", command=self.esborrar_seleccionats).pack(side="right", padx=2)
 
         # Capçalera de la taula
         frame_capcalera = ttk.Frame(frame_llista)
@@ -169,12 +169,37 @@ class RedControlApp:
             except Exception:
                 self.dispositius = {}
 
-    def netejar_desats(self):
-        if messagebox.askyesno("Confirmar", "Vols esborrar la llista desada de dispositius?"):
-            self.dispositius.clear()
-            self.desar_dispositius()
-            self.actualitzar_llista_ui()
-            self.lbl_estat.config(text="Llista netejada.")
+    def esborrar_seleccionats(self):
+        seleccionats = [ip for ip in self.obtenir_ips_seleccionades() if ip in self.dispositius]
+
+        if not seleccionats:
+            messagebox.showwarning("Atenció", "No hi ha cap dispositiu marcat per esborrar.")
+            return
+
+        if len(seleccionats) <= 12:
+            detall = "\n".join(
+                f"• {self.dispositius[ip].get('alias') or ip}  ({ip})" for ip in seleccionats
+            )
+        else:
+            detall = f"{len(seleccionats)} dispositius marcats"
+
+        confirmacio = messagebox.askyesno(
+            "Confirmar esborrat",
+            f"S'esborraran de la llista:\n\n{detall}\n\n"
+            "Només s'eliminen del registre. No s'apaga ni es toca cap equip."
+        )
+        if not confirmacio:
+            return
+
+        for ip in seleccionats:
+            self.dispositius.pop(ip, None)
+            self.check_vars.pop(ip, None)
+
+        self.desar_dispositius()
+        self.actualitzar_llista_ui()
+        self.lbl_estat.config(
+            text=f"S'han esborrat {len(seleccionats)} dispositiu(s). En queden {len(self.dispositius)}."
+        )
 
     # --- Escaneig de Xarxa ---
     def obtenir_hostname(self, ip):
