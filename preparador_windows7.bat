@@ -28,17 +28,18 @@ net start RemoteRegistry
 net start W32Time
 
 echo.
-echo === 2/6  Firewall =======================================
-REM Los nombres de grupo estan traducidos: se prueban ES y EN,
-REM los que no existan daran error y se ignoran.
-netsh advfirewall firewall set rule group="Administracion remota de tareas programadas" new enable=Yes
-netsh advfirewall firewall set rule group="Administración remota de tareas programadas" new enable=Yes
-netsh advfirewall firewall set rule group="Remote Scheduled Tasks Management" new enable=Yes
-netsh advfirewall firewall set rule group="Compartir archivos e impresoras" new enable=Yes
-netsh advfirewall firewall set rule group="File and Printer Sharing" new enable=Yes
-netsh advfirewall firewall set rule group="Instrumental de administracion de Windows (WMI)" new enable=Yes
-netsh advfirewall firewall set rule group="Windows Management Instrumentation (WMI)" new enable=Yes
-netsh advfirewall firewall add rule name="NTP cliente UDP 123" dir=out action=allow protocol=UDP remoteport=123
+echo === 2/6  Firewall (valido tambien en red Publica) ========
+REM profile=Any amplia el ambito de la regla a Dominio+Privada+Publica,
+REM sin tocar la categoria de red del equipo. Los nombres de grupo
+REM estan traducidos: se prueban ES y EN, los que no existan se ignoran.
+netsh advfirewall firewall set rule group="Administracion remota de tareas programadas" new enable=Yes profile=Any
+netsh advfirewall firewall set rule group="Administración remota de tareas programadas" new enable=Yes profile=Any
+netsh advfirewall firewall set rule group="Remote Scheduled Tasks Management" new enable=Yes profile=Any
+netsh advfirewall firewall set rule group="Compartir archivos e impresoras" new enable=Yes profile=Any
+netsh advfirewall firewall set rule group="File and Printer Sharing" new enable=Yes profile=Any
+netsh advfirewall firewall set rule group="Instrumental de administracion de Windows (WMI)" new enable=Yes profile=Any
+netsh advfirewall firewall set rule group="Windows Management Instrumentation (WMI)" new enable=Yes profile=Any
+netsh advfirewall firewall add rule name="NTP cliente UDP 123" dir=out action=allow protocol=UDP remoteport=123 profile=Any
 
 echo.
 echo === 3/6  UAC remoto (grupo de trabajo, sin dominio) =====
@@ -80,4 +81,7 @@ echo.
 echo Listo. Si "w32tm /query /source" muestra "Local CMOS Clock",
 echo el equipo NO esta sincronizando: revisa que %CONTROLADOR%
 echo responda por UDP 123.
+echo.
+echo IMPORTANTE: si el cambio de UAC remoto (paso 3) es la primera vez
+echo que se aplica en este equipo, reinicialo para que tenga efecto.
 pause
